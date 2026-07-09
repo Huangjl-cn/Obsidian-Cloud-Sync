@@ -1,13 +1,13 @@
 ---
-title: "第一次用Obsidian？先把这8个插件装好再说"
-source: "https://www.bilibili.com/video/BV1Gjd5BPEhh/?spm_id_from=333.337.search-card.all.click&vd_source=6f2fb11b60bcc48d85309f56fa59e87f"
+title: 第一次用Obsidian？先把这8个插件装好再说
+source: https://www.bilibili.com/video/BV1Gjd5BPEhh/?spm_id_from=333.337.search-card.all.click&vd_source=6f2fb11b60bcc48d85309f56fa59e87f
 author:
   - "[[Dannie_e]]"
 published: 2026-04-17
 created: 2026-06-27
-description: "用了 Obsidian 很久，但一直感觉没有完全发挥它的潜力？我从下载的 20 几个插件里，最后只留下了这 8 个——每一个都真的在用，每一个都有它留下来的理由 🫶分成 4 大类👇🌐 获取外部内容 → Obsidian Web Clipper｜看到好东西一键存进来⚙️ 软件本身功能提升 → Setting Search｜秒找任何设置 → Recent Files｜最近文件一目了然 →"
+description: 用了 Obsidian 很久，但一直感觉没有完全发挥它的潜力？我从下载的 20 几个插件里，最后只留下了这 8 个——每一个都真的在用，每一个都有它留下来的理由 🫶分成 4 大类👇🌐 获取外部内容 → Obsidian Web Clipper｜看到好东西一键存进来⚙️ 软件本身功能提升 → Setting Search｜秒找任何设置 → Recent Files｜最近文件一目了然 →
 tags:
-  - "clippings"
+  - clippings
 ---
 <iframe width="560" height="315" src="https://player.bilibili.com/player.html?bvid=BV1Gjd5BPEhh&amp;page=1&amp;high_quality=1&amp;danmaku=0" title="Bilibili video player" frameborder="0" allowfullscreen=""></iframe>
 
