@@ -4,5 +4,6 @@
   "calendar",
   "omnisearch",
   "text-extractor",
-  "obsidian-git"
+  "obsidian-git",
+  "obsidian-linter"
 ]
