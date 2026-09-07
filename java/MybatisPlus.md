@@ -313,24 +313,23 @@ public interface UserMapper extends BaseMapper<User> {
 ##### 查询
 
 - get
-    
+
     ​![image](assets/image-20251227135743-or1bu9i.png)​
-    
+
     - ​getById​：根据id查询1条数据
     - ​`getOne(Wrapper<T>)`​：根据Wrapper​查询1条数据
     - ​getBaseMapper​：获取Service​内的BaseMapper​实现，某些时候需要直接调用Mapper​内的自定义SQL​时可以用这个方法获取到Mapper​
-
 - list
-    
+
     ​![image](assets/image-20251227135840-qsr5vkp.png)​
-    
+
     - ​listByIds​：根据id批量查询
     - ​`list(Wrapper<T>)`​：根据Wrapper条件查询多条数据
     - ​list()​：查询所有
 - count
-    
+
     ​![image](assets/image-20251227140040-2caevye.png)​
-    
+
     - ​count()​：统计所有数量
     - ​`count(Wrapper<T>)`​：统计符合Wrapper​条件的数据数量
 
@@ -357,7 +356,7 @@ public interface UserMapper extends BaseMapper<User> {
 > 在实现复杂查询条件的时候，IService提供了对比Wrapper更加简化的方法，不需要常见Wrapper对象，直接使用lambdaQuery、lambdaUpdate即可实现
 
 - 使用LambdaQueryWrapper
-    
+
     ```Java
     @GetMapping("/list")
     public List<UserVO> queryUsers(UserQuery query){
@@ -377,9 +376,9 @@ public interface UserMapper extends BaseMapper<User> {
         return BeanUtil.copyToList(users, UserVO.class);
     }
     ```
-    
+
 - 使用lambQuery
-    
+
     ```Java
     @GetMapping("/list")
     public List<UserVO> queryUsers(UserQuery query){
@@ -400,14 +399,14 @@ public interface UserMapper extends BaseMapper<User> {
     }
     
     ```
-    
+
     在lambdaQuery方法中除了可以构建条件，还需要在链式编程的最后添加一个list()​，这是在告诉MP调用结果需要是一个list集合。这里不仅可以用list()​，可选的方法还有：
-    
+
     - ​.one()​：最多1个结果
     - ​.list()​：返回集合结果
     - ​.count()​：返回计数结果
 - lambdaUpdate
-    
+
     ```Java
     @Override
     @Transactional
@@ -432,7 +431,6 @@ public interface UserMapper extends BaseMapper<User> {
                 .update();
     }
     ```
-    
 
 ---
 
@@ -455,7 +453,7 @@ public interface UserMapper extends BaseMapper<User> {
 |                    | ​boolean saveBatch(Collection<T> entityList)​              | ​批量插入​。内部采用分批提交，性能远高于循环调用单次插入，是Service层最核心的优势之一。               |
 |                    | ​boolean updateBatchById(Collection<T> entityList)​        | ​根据ID批量更新​。同样有分批处理机制，用于批量更新不同ID对象的不同字段。                        |
 |                    | ​boolean removeByIds(Collection<?> idList)​                | ​根据ID集合批量删除​。相较于Mapper的deleteByIds​，返回布尔值更符合业务逻辑判断习惯。          |
-||​T getOne(Wrapper<T> wrapper, boolean throwEx)​|增强版的查询单条。可控制当结果不唯一时​是否抛出异常​，比selectOne​更安全可控。|
+|​|增强版的查询单条。可控制当结果不唯一时​是否抛出异常​，比selectOne​更安全可控。|
 ||链式查询/更新​ (如.query().eq(...).list()​)|提供非常优雅的​链式API​，可以在一行代码内完成复杂条件构造，提升代码可读性。|
 
 #### 💡 如何选择：场景与最佳实践
