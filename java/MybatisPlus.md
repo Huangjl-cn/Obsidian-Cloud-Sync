@@ -121,7 +121,7 @@ IdType属性的值有多个
 
 - 成员变量名与数据库字段名不一致
 - 成员变量是以isXXX​命名，按照JavaBean​的规范，MybatisPlus​识别字段时会把is​去除，这就导致与数据库不符。
-- 成员变量名与数据库一致，但是与数据库的关键字冲突。使用@TableField​注解给字段名添加转义字符：``​
+- 成员变量名与数据库一致，但是与数据库的关键字冲突。使用@TableField​注解给字段名添加转义字符
 
 示例代码：
 
@@ -164,25 +164,24 @@ public interface UserMapper extends BaseMapper<User> {
 
 对应的方法，增、删、改、查对应的命名是insert​、delete​、update​、select​
 
-​![image](assets/image-20251226204552-1qe7sag.png)​
+​![](assets/MybatisPlus/file-20260908082337432.png)​
 
 ---
 
 ### Wrapper
 
 > 若要使用更加复杂的查询需要使用构造器Wrapper​
-
-​![image](assets/image-20251226211734-giva9pq.png)​
+​![](assets/MybatisPlus/file-20260908082426273.png)​
 
 ​AbstractWrapper​提供了where​中所有的条件构造方法：  
-​![image](assets/image-20251226213254-zhv5gqk.png)​
+​![](assets/MybatisPlus/file-20260908082434680.png)​
 
 #### QueryWrapper
 
 > 无论是删、改、查操作，都可以使用QueryWrapper来构建查询条件
 
 QueryWrapper在AbstractWrapper的基础上拓展了一个select​方法，允许指定查询字段：  
-​![image](assets/image-20251226213402-a5kt8ua.png)  
+​![](assets/MybatisPlus/file-20260908082519182.png)  
 查询操作示例代码如下：
 
 ```Java
@@ -220,7 +219,7 @@ void testUpdateByQueryWrapper() {
 > 由于基于BaseMapper中的update方法更新时只能直接赋值，对于一些复杂的需求就难以实现。若SET的赋值结果是基于字段现有值的，这个时候就要利用UpdateWrapper中的setSql功能了
 
 UpdateWrapper在AbstractWrapper的基础上拓展了一个set​方法，允许指定SQL中的SET部分：  
-​![image](assets/image-20251226213451-bdm6nc9.png)  
+​![](assets/MybatisPlus/file-20260908082821627.png)  
 示例代码如下：
 
 ```Java
@@ -303,7 +302,7 @@ public interface UserMapper extends BaseMapper<User> {
 
 ##### 新增
 
-​![image](assets/image-20251227135137-t7mgs73.png)​
+​![](assets/MybatisPlus/file-20260908082856577.png)​
 
 - ​save​是新增单个元素
 - ​saveBatch​是批量新增
@@ -314,28 +313,28 @@ public interface UserMapper extends BaseMapper<User> {
 
 - get
 
-    ​![image](assets/image-20251227135743-or1bu9i.png)​
+    ​![](assets/MybatisPlus/file-20260908082905456.png)​
 
     - ​getById​：根据id查询1条数据
     - ​`getOne(Wrapper<T>)`​：根据Wrapper​查询1条数据
     - ​getBaseMapper​：获取Service​内的BaseMapper​实现，某些时候需要直接调用Mapper​内的自定义SQL​时可以用这个方法获取到Mapper​
 - list
 
-    ​![image](assets/image-20251227135840-qsr5vkp.png)​
+    ​![](assets/MybatisPlus/file-20260908082912511.png)​
 
     - ​listByIds​：根据id批量查询
     - ​`list(Wrapper<T>)`​：根据Wrapper条件查询多条数据
     - ​list()​：查询所有
 - count
 
-    ​![image](assets/image-20251227140040-2caevye.png)​
+    ​![](assets/MybatisPlus/file-20260908082920705.png)​
 
     - ​count()​：统计所有数量
     - ​`count(Wrapper<T>)`​：统计符合Wrapper​条件的数据数量
 
 ##### 更新
 
-​![image](assets/image-20251227135426-4kbvcyb.png)​
+​![](assets/MybatisPlus/file-20260908082926351.png)​
 
 - ​updateById​：根据id修改
 - `​update(Wrapper<T>)`​：根据UpdateWrapper​修改，Wrapper​中包含set​和where​部分
@@ -344,7 +343,7 @@ public interface UserMapper extends BaseMapper<User> {
 
 ##### 删除
 
-​![image](assets/image-20251227135333-5lm6eek.png)​
+​![](assets/MybatisPlus/file-20260908082933326.png)​
 
 - ​removeById​：根据id删除
 - ​removeByIds​：根据id批量删除
@@ -443,30 +442,28 @@ public interface UserMapper extends BaseMapper<User> {
 
 #### 📊 特有方法对比
 
-| 层级/接口              | 特有方法举例                                                     | 核心用途与场景                                                        |
-| ------------------ | ---------------------------------------------------------- | -------------------------------------------------------------- |
-| DAO层:BaseMapper​   | ​List<Object> selectObjs(Wrapper<T> wrapper)​              | 查询并只返回第一个字段的值的列表，适用于只需要获取单个字段（如ID、名称）的场景，结果非常轻量。               |
-|                    | ​List<Map<String, Object>> selectMaps(Wrapper<T> wrapper)​ | 查询结果以List<Map>​形式返回，适用于无需转换成实体对象的统计查询、动态字段查询或结果集直接转为JSON输出的情况。 |
-|                    | ​T selectOne(Wrapper<T> wrapper)​                          | ​严格查询单条记录​。如果结果多于一条，会抛出异常，适用于根据唯一键查询的场景。                       |
-|                    | ​int deleteByMap(Map<String, Object> columnMap)​           | 根据简单的字段-值Map条件进行删除，适合等值条件删除。                                   |
-| Service层:IService​ | ​boolean saveOrUpdate(T entity)​                           | ​新增或更新​。根据实体对象的主键是否存在自动判断操作类型，是业务中非常高频和便捷的方法。                  |
-|                    | ​boolean saveBatch(Collection<T> entityList)​              | ​批量插入​。内部采用分批提交，性能远高于循环调用单次插入，是Service层最核心的优势之一。               |
-|                    | ​boolean updateBatchById(Collection<T> entityList)​        | ​根据ID批量更新​。同样有分批处理机制，用于批量更新不同ID对象的不同字段。                        |
-|                    | ​boolean removeByIds(Collection<?> idList)​                | ​根据ID集合批量删除​。相较于Mapper的deleteByIds​，返回布尔值更符合业务逻辑判断习惯。          |
-|​|增强版的查询单条。可控制当结果不唯一时​是否抛出异常​，比selectOne​更安全可控。|
-||链式查询/更新​ (如.query().eq(...).list()​)|提供非常优雅的​链式API​，可以在一行代码内完成复杂条件构造，提升代码可读性。|
+| 层级/接口             | 特有方法举例                                                     | 核心用途与场景                                                         |
+| ----------------- | ---------------------------------------------------------- | --------------------------------------------------------------- |
+| DAO层：BaseMapper   | `List<Object> selectObjs(Wrapper<T> wrapper)`              | 查询并只返回第一个字段的值的列表，适用于只需要获取单个字段（如ID、名称）的场景，结果非常轻量。                |
+|                   | `List<Map<String, Object>> selectMaps(Wrapper<T> wrapper)` | 查询结果以List\<Map\>形式返回，适用于无需转换成实体对象的统计查询、动态字段查询或结果集直接转为JSON输出的情况。 |
+|                   | `T selectOne(Wrapper<T> wrapper)`                          | 严格查询单条记录。如果结果多于一条，会抛出异常，适用于根据唯一键查询的场景。                          |
+|                   | `int deleteByMap(Map<String, Object> columnMap)`           | 根据简单的字段-值Map条件进行删除，适合等值条件删除。                                    |
+| Service层：IService | `boolean saveOrUpdate(T entity)`                           | 新增或更新。根据实体对象的主键是否存在自动判断操作类型，是业务中非常高频和便捷的方法。                     |
+|                   | `boolean saveBatch(Collection<T> entityList)`              | 批量插入。内部采用分批提交，性能远高于循环调用单次插入，是Service层最核心的优势之一。                  |
+|                   | `boolean updateBatchById(Collection<T> entityList)`        | 根据ID批量更新。同样有分批处理机制，用于批量更新不同ID对象的不同字段。                           |
+|                   | `boolean removeByIds(Collection<?> idList)`                | 根据ID集合批量删除。相较于Mapper的deleteByIds，返回布尔值更符合业务逻辑判断习惯。              |
+|                   | `T getOne(Wrapper<T> wrapper, boolean throwEx)`            | 增强版的查询单条。可控制当结果不唯一时是否抛出异常，比selectOne更安全可控。                      |
+|                   | 链式查询/更新（如 `.query().eq(...).list()`）                       | 提供非常优雅的链式API，可以在一行代码内完成复杂条件构造，提升代码可读性。                          |
 
 #### 💡 如何选择：场景与最佳实践
 
 理解这些特有方法后，选择使用哪个就非常清晰了：
 
 1. 何时使用 BaseMapper​的特有方法？
-    
     - 执行特定类型的查询：当你需要查询结果不是标准实体对象列表时，应直接使用 BaseMapper​的方法。例如， selectObjs​用于获取单个字段值的列表，或者 selectMaps​用于直接获取可序列化的Map结果。
     - ​在自定义的Mapper方法中​：当你在Service实现类中编写复杂业务逻辑，需要组合多个基础操作时，可以通过 getBaseMapper()​调用这些更底层的方法。
     - ​追求极致的性能控制​：在极少数需要精细控制SQL执行细节的场景下，直接使用 BaseMapper​的原子操作。
 2. 何时应优先使用 IService​的特有方法？
-    
     - ​绝大多数业务逻辑层代码​：在Controller或自定义Service方法中，​应优先使用 IService​的方法​。它的方法设计（如返回boolean​）更符合业务语义，且批量操作方法能显著提升性能。
     - ​需要批量操作时​：这是最强烈的使用场景。saveBatch​, updateBatchById​等方法内置了分批处理逻辑，是 BaseMapper​所不具备的核心优势，能有效避免大数据量操作时的性能问题。
     - ​需要“保存或更新”逻辑时​：saveOrUpdate​方法极大地简化了这种常见业务逻辑。
@@ -506,11 +503,11 @@ create table if not exists question
 #### 2、使用MybatisX插件自动生成实体类、mapper接口、service接口和实体类
 
 1）创建好库表后，右键对应的表使用MybatisX-Generator功能  
-​![image](assets/image-20251227160347-61hmw2d.png)​
+​![](assets/MybatisPlus/file-20260908082953002.png)​
 
 2）选择自己需要的功能  
-​![image](assets/image-20251227161659-1qtjgkv.png)|  
-​![image](assets/image-20251227163048-tdabjuo.png)​
+​![](assets/MybatisPlus/file-20260908083007642.png)  
+​![](assets/MybatisPlus/file-20260908083016319.png)​
 
 #### 3、添加到自己的项目中
 
