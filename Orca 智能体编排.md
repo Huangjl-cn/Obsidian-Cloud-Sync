@@ -8,17 +8,16 @@
 
 一句话:Orca 编排是**多 Agent 协作的协调层**——解决"多个 Agent 如何并行干活、如何互通消息、如何追踪进度、如何收尾"。
 
-| 能力             | 具体是什么                                 |
+| 能力             | 具体是什么                                 |
 | -------------- | ------------------------------------- |
 | **并行派活**       | 把若干任务同时分给不同 Agent(每个在自己独立的工作区里),互不干扰  |
 | **任务工单(DAG)**  | 任务可声明依赖,Orca 判定谁 ready、谁等谁            |
 | **Agent 间消息**  | 互相发消息:支持类型/优先级/线程,可追问可回复              |
-| **生命周期上报**     | 被派发的 Agent 干完主动报告,系统自动结算任务;卡住可求助      |
+| **生命周期上报**     | 被派发的 Agent 干完主动报告,系统自动结算任务;卡住可求助      |
 | **决策门**        | 协调者可在关键节点挂起任务,等人拍板再放行                 |
 | **失败重试与熔断**    | 同一任务可重派,连续失败自动标记 failed               |
 | **资源收尾**       | worker 完成后释放/保留其终端,输出留档可再审            |
 | **跨服务器**       | 通过稳定逻辑地址把 worker 派到远程 Orca 服务器        |
-|                |                                       |
 
 ---
 
@@ -30,6 +29,7 @@
 # ── 1. 立项:一个 Run = 一次协作会话 ──────────────────────────
 orca orchestration run-create --objective "登录功能前后端开发"
 # → run_abc123(之后所有东西都挂在这个 run_id 下)
+#
 #   关键:run-create 默认把"当前终端"(或 --from 指定终端)绑定为该 Run 的协调者
 #   runs.coordinator_handle = 绑定终端 handle(单协调者模型)
 #   因此后续 check 不带 --run 时,默认检查的就是"这个终端绑定的 Run"
@@ -85,7 +85,7 @@ orca orchestration reply --id <msg_id> --body "..." --json
 | 一句话提醒、打断、给指令         | `terminal send`(即时,像人打字)                           |
 | 任务书、工单、需要对方确认收到      | `orchestration send`(落库,可追踪,对方 check 拉取)           |
 | worker 干完汇报 / 被卡住求助  | `send --type worker_done / question / escalation`  |
-| 协调者回 worker 的问题      | `reply --id <msg_id>`                              |
+| 协调者回 worker 的问题      | `reply --id <msg_id>`                              |
 
 > **worktree 是什么**:git 的"一个仓库多份工作区"机制。每个 worktree 有独立的工作区文件 + 私有 HEAD/index,但共享同一个对象库和全部分支。多个 Agent 各占一个 worktree,`git add/commit` 互不干扰,最后各自分支 merge 回主线。worktree 的 `.git` 只是一个 100 字节的指针文件(`gitdir: 主仓库/.git/worktrees/<id>`),**不复制对象库**。
 
@@ -100,15 +100,25 @@ orca orchestration reply --id <msg_id> --body "..." --json
 核心结论:**Orca 有两条完全独立的通信管道,对应两种发送方式**。
 
 ```
-┌────────────────────────────────────────────────────    ┐
-│                  Orca Runtime                      │
-│                                                    │
-│  实时管道                        持久管道             │
-│  PTY 直写                         SQLite 信箱        │
+
+┌────────────────────────────────────────────────────┐
+
+│                  Orca Runtime                       │
+
+│                                                    │
+
+│  实时管道                    持久管道               │
+
+│  PTY 直写                    SQLite 信箱            │
+
 │  terminal send ──┐           orchestration send ──┐ │
+
 │                  ▼                                ▼ │
-│  node-pty.write()             INSERT INTO messages │
-│  对方 TUI 立即显示           对方 check 主动拉取       │
+
+│  node-pty.write()             INSERT INTO messages │ │
+
+│  对方 TUI 立即显示           对方 check 主动拉取    │ │
+
 └────────────────────────────────────────────────────┘
 
 ```
@@ -174,6 +184,10 @@ sendMessage({to, subject, body, type}) {
 }
 ```
 
+**注意 `--run` 与 `--to` 是两个维度**:`--run run_xxx` 声明消息**归属于哪个 Run**(写进 `messages.run_id`,决定记账/审计范围,可省略——默认取当前终端绑定的 Run);`--to` 才是**投递到哪个信箱**(写进 `to_handle`,决定谁能 check 到)。投 Run 信箱时两者是同一个 run id:`--run run_abc --to run:run_abc`(一个裸写、一个带 `run:` 前缀)。
+
+**send 返回的两类 ID**:`result.message.id`(如 `msg_41ded8606b77`)是**单条消息 ID**,供 `reply --id` / `ask --resume` 定位;`check` 返回的 `result.deliveryId` 是**批次 ID**,供 `check --ack` 结算。回复串线程用 message id,消费确认用 delivery id。
+
 **地址 → 合约分支**:
 
 | 地址                  | contract            | 效果                                                                    |
@@ -202,6 +216,8 @@ check(runId) {
 ```sql
 UPDATE deliveries SET status='acknowledged', acknowledged_at=now() WHERE id=?
 ```
+
+**「能不能 check 到自己的消息」取决于 `--to` 地址,不取决于发送者身份**——`send` 只负责写 `messages` 表并生成批次,不检查发信人。投到 `run:run_xxx`(共享信箱)的消息,协调者自己 `check` 也会拉到自己发的那条;投到 `dispatch:<id>` 或 `term_xxx`(定向信箱)则只有接收方拉得到。这也解释了为什么正常编排中协调者给 worker 的指令走定向地址,只有 worker 回的 `worker_done`/`reply` 才进 Run 信箱由协调者消费。
 
 **未 ack 前同一批次反复返回 → 至少一次投递(at-least-once)**;ack 后消息本身 `read` 置 1。
 
@@ -263,8 +279,7 @@ CREATE TABLE messages (
   subject       TEXT NOT NULL,
   body          TEXT NOT NULL DEFAULT '',
   type          TEXT NOT NULL DEFAULT 'status'
-    CHECK(type IN ('status','dispatch','worker_done','merge_ready',
-             'escalation','handoff','decision_gate','question','heartbeat')),
+    CHECK(type IN ('status','dispatch','worker_done','merge_ready',              'escalation','handoff','decision_gate','question','heartbeat')),
   priority      TEXT NOT NULL DEFAULT 'normal' CHECK(priority IN ('normal','high','urgent')),
   thread_id     TEXT,             -- reply 串联
   payload       TEXT,             -- JSON(taskId/dispatchId/files-modified)
@@ -273,103 +288,103 @@ CREATE TABLE messages (
 )
 
 CREATE TABLE deliveries (
-  id                    TEXT PRIMARY KEY,
-  run_id                TEXT NOT NULL,
-  consumer_generation   INTEGER NOT NULL,
-  message_ids           TEXT NOT NULL,   -- JSON 数组:一批包含哪些消息
-  status                TEXT NOT NULL DEFAULT 'outstanding'
-    CHECK(status IN ('outstanding', 'acknowledged', 'fenced')),
-  created_at / acknowledged_at
-)
+  id                    TEXT PRIMARY KEY,
+  run_id                TEXT NOT NULL,
+  consumer_generation   INTEGER NOT NULL,
+  message_ids           TEXT NOT NULL,   -- JSON 数组:一批包含哪些消息
+  status                TEXT NOT NULL DEFAULT 'outstanding'
+    CHECK(status IN ('outstanding', 'acknowledged', 'fenced')),
+  created_at / acknowledged_at
+);
 
 CREATE TABLE tasks (
-  id            TEXT PRIMARY KEY,
-  run_id        TEXT NOT NULL,
-  parent_id     TEXT,                    -- 子任务(可选)
-  created_by_terminal_handle TEXT,       -- 谁建的工单
-  created_by_run_generation  INTEGER,
-  task_title / display_name TEXT,
-  spec          TEXT NOT NULL,           -- 任务书全文
-  status        TEXT NOT NULL DEFAULT 'pending'
-    CHECK(status IN ('pending','ready','dispatched','completed','failed','blocked')),
-  deps          TEXT NOT NULL DEFAULT '[]',   -- JSON:依赖哪些 task
-  result        TEXT,                    -- 结算时写入的结果
-  created_at / completed_at
-)
+  id            TEXT PRIMARY KEY,
+  run_id        TEXT NOT NULL,
+  parent_id     TEXT,                    -- 子任务(可选)
+  created_by_terminal_handle TEXT,       -- 谁建的工单
+  created_by_run_generation  INTEGER,
+  task_title / display_name TEXT,
+  spec          TEXT NOT NULL,           -- 任务书全文
+  status        TEXT NOT NULL DEFAULT 'pending'
+    CHECK(status IN ('pending','ready','dispatched','completed','failed','blocked')),
+  deps          TEXT NOT NULL DEFAULT '[]',   -- JSON:依赖哪些 task
+  result        TEXT,                    -- 结算时写入的结果
+  created_at / completed_at
+);
 
 CREATE TABLE dispatch_contexts (
-  id                  TEXT PRIMARY KEY,
-  run_id / task_id    TEXT NOT NULL,
-  contract_version    INTEGER NOT NULL DEFAULT 1,   -- 生命周期合约版本
-  launch_token_hash   TEXT,             -- 启动凭据哈希(防伪造)
-  assignee_handle     TEXT,             -- 被派给的终端
-  assignee_pane_key   TEXT,
-  capability_hash     TEXT,
-  process_incarnation TEXT,
-  capability_revoked_at TEXT,
-  status              TEXT NOT NULL DEFAULT 'pending'
-    CHECK(status IN ('pending','dispatched','completed','failed','circuit_broken')),
-  failure_count       INTEGER NOT NULL DEFAULT 0,   -- 失败计数(3 次熔断)
-  last_failure        TEXT,
-  termination_reason  TEXT,             -- 进程消失原因
-  depth               INTEGER NOT NULL DEFAULT 1,   -- 嵌套深度:root 的 worker=1
-  dispatched_at / completed_at / last_heartbeat_at
-)
+  id                  TEXT PRIMARY KEY,
+  run_id / task_id    TEXT NOT NULL,
+  contract_version    INTEGER NOT NULL DEFAULT 1,   -- 生命周期合约版本
+  launch_token_hash   TEXT,             -- 启动凭据哈希(防伪造)
+  assignee_handle     TEXT,             -- 被派给的终端
+  assignee_pane_key   TEXT,
+  capability_hash     TEXT,
+  process_incarnation TEXT,
+  capability_revoked_at TEXT,
+  status              TEXT NOT NULL DEFAULT 'pending'
+    CHECK(status IN ('pending','dispatched','completed','failed','circuit_broken')),
+  failure_count       INTEGER NOT NULL DEFAULT 0,   -- 失败计数(3 次熔断)
+  last_failure        TEXT,
+  termination_reason  TEXT,             -- 进程消失原因
+  depth               INTEGER NOT NULL DEFAULT 1,   -- 嵌套深度:root 的 worker=1
+  dispatched_at / completed_at / last_heartbeat_at
+);
 
 CREATE TABLE worker_dispatches (
-  dispatch_id            TEXT PRIMARY KEY,
-  runtime_epoch          TEXT,
-  state                  TEXT NOT NULL DEFAULT 'starting'
-    CHECK(state IN ('starting','ready','start_unknown','failed','succeeded',
-                    'stopping','stop_unknown','stopped','abandoned')),
-  stage                  TEXT NOT NULL DEFAULT 'accepted',
-  worktree_id            TEXT,          -- 哪个 worktree
-  agent_terminal_handle  TEXT,          -- 哪个 agent 终端
-  setup_state            TEXT NOT NULL DEFAULT 'not_applicable',
-  effects                TEXT NOT NULL DEFAULT '[]',   -- 启动造成的效果清单
-  residual_resources     TEXT NOT NULL DEFAULT '[]',   -- 未释放资源
-  start_options          TEXT NOT NULL DEFAULT '{}',
-  last_error             TEXT,
-  created_at / updated_at
-)
+  dispatch_id            TEXT PRIMARY KEY,
+  runtime_epoch          TEXT,
+  state                  TEXT NOT NULL DEFAULT 'starting'
+    CHECK(state IN ('starting','ready','start_unknown','failed','succeeded',
+                    'stopping','stop_unknown','stopped','abandoned')),
+  stage                  TEXT NOT NULL DEFAULT 'accepted',
+  worktree_id            TEXT,          -- 哪个 worktree
+  agent_terminal_handle  TEXT,          -- 哪个 agent 终端
+  setup_state            TEXT NOT NULL DEFAULT 'not_applicable',
+  effects                TEXT NOT NULL DEFAULT '[]',   -- 启动造成的效果清单
+  residual_resources     TEXT NOT NULL DEFAULT '[]',   -- 未释放资源
+  start_options          TEXT NOT NULL DEFAULT '{}',
+  last_error             TEXT,
+  created_at / updated_at
+);
 
 CREATE TABLE decision_gates (
-  id            TEXT PRIMARY KEY,
-  run_id / task_id  TEXT NOT NULL,
-  question      TEXT NOT NULL,          -- 拍板问题
-  options       TEXT NOT NULL DEFAULT '[]',   -- JSON:候选项
-  status        TEXT NOT NULL DEFAULT 'pending'
-    CHECK(status IN ('pending','resolved','timeout')),
-  resolution    TEXT,
-  created_at / resolved_at
-)
-  
+  id            TEXT PRIMARY KEY,
+  run_id / task_id  TEXT NOT NULL,
+  question      TEXT NOT NULL,          -- 拍板问题
+  options       TEXT NOT NULL DEFAULT '[]',   -- JSON:候选项
+  status        TEXT NOT NULL DEFAULT 'pending'
+    CHECK(status IN ('pending','resolved','timeout')),
+  resolution    TEXT,
+  created_at / resolved_at
+);
+
 CREATE TABLE question_threads (
-  message_id            TEXT PRIMARY KEY,   -- question 消息 id
-  run_id / dispatch_id  TEXT NOT NULL,
-  asker_handle          TEXT NOT NULL,
-  status                TEXT NOT NULL DEFAULT 'pending'
-    CHECK(status IN ('pending','answered','closed')),
-  answer_message_id     TEXT,           -- reply 生成的消息
-  answer_body           TEXT,
-  answered_by_generation INTEGER,
-  created_at / answered_at / closed_at
-)
+  message_id            TEXT PRIMARY KEY,   -- question 消息 id
+  run_id / dispatch_id  TEXT NOT NULL,
+  asker_handle          TEXT NOT NULL,
+  status                TEXT NOT NULL DEFAULT 'pending'
+    CHECK(status IN ('pending','answered','closed')),
+  answer_message_id     TEXT,           -- reply 生成的消息
+  answer_body           TEXT,
+  answered_by_generation INTEGER,
+  created_at / answered_at / closed_at
+);
 
 CREATE TABLE worker_terminal_resources (
-  id                       TEXT PRIMARY KEY,
-  origin_dispatch_id       TEXT NOT NULL,   -- 最初占有者
-  owner_dispatch_id        TEXT NOT NULL,   -- 当前占有者
-  prior_owner_dispatch_ids TEXT NOT NULL DEFAULT '[]',  -- 转移历史
-  worktree_id / terminal_handle / pane_key / process_incarnation / host_scope,
-  ownership_state          TEXT NOT NULL DEFAULT 'owned'
-    CHECK(ownership_state IN ('owned','transferred','user_owned','external','released')),
-  release_state            TEXT NOT NULL DEFAULT 'not_requested'
-    CHECK(release_state IN ('not_requested','retained','requested','releasing','released','unknown')),
-  retained_reason / release_requested_at / release_completed_at / release_error,
-  archive_source / archive_status,     -- 输出留档
-  created_at / updated_at
-)
+  id                       TEXT PRIMARY KEY,
+  origin_dispatch_id       TEXT NOT NULL,   -- 最初占有者
+  owner_dispatch_id        TEXT NOT NULL,   -- 当前占有者
+  prior_owner_dispatch_ids TEXT NOT NULL DEFAULT '[]',  -- 转移历史
+  worktree_id / terminal_handle / pane_key / process_incarnation / host_scope,
+  ownership_state          TEXT NOT NULL DEFAULT 'owned'
+    CHECK(ownership_state IN ('owned','transferred','user_owned','external','released')),
+  release_state            TEXT NOT NULL DEFAULT 'not_requested'
+    CHECK(release_state IN ('not_requested','retained','requested','releasing','released','unknown')),
+  retained_reason / release_requested_at / release_completed_at / release_error,
+  archive_source / archive_status,     -- 输出留档
+  created_at / updated_at
+);
 ```
 
 ### 4.2 设计要点
@@ -384,6 +399,8 @@ CREATE TABLE worker_terminal_resources (
 ---
 
 ## 5. Worker 通信机制:ask / heartbeat / escalation
+
+**`send` 不是 worker 专属**——它只是「往信箱写一条消息」的通用命令,协调者与 worker 都能用,但惯用方向不同:协调者主要用 `worker-start`/`dispatch`(派活)、`reply`(回 worker 问题)、`terminal send`(实时指令),真正用 send 的场景是广播 status 或给特定 worker 单独指导(`--to dispatch:<id>`);worker 则几乎只能靠 `send` 上报(`--type worker_done`/`heartbeat` 没有替代命令)。边界:worker_done/heartbeat 是 **Dispatch 级信号**,必须由被派发的 worker 发(带 task-id/dispatch-id,校验 assignee 匹配),且不能发 group;协调者发 status 类消息无此限制。
 
 除了 `send` 状态消息,worker 还有三类上行信号(它们都有独立的表/字段支持):
 
@@ -428,6 +445,15 @@ worker 只能发**一次** `worker_done`(带 `--outcome succeeded|failed`),发�
 1. **复用**:同一 worker 立即接下一个 Task → `worker-start --task <next> --terminal <handle>`
 2. **保留**:用户要求调试 → `worker-retain --dispatch <id>`
 3. **释放**:默认 → `worker-release --dispatch <id>`(关掉该 dispatch 专属的终端,输出已存档可 `worker-read` 再读)
+
+### 5.5 消息流向的不对称性
+
+```
+协调者 → worker:  send --to dispatch:<id> 或 term_xxx(定向信箱,只有接收方拉得到)
+worker → 协调者:  reply / worker_done(默认投 Run 信箱,to_handle = run:run_xxx)
+```
+
+worker 的 reply **不需要也不能**自己指定 `--to`——它"回"的是原消息归属的 Run 信箱(`to_handle=run:run_xxx`),协调者 check 该 Run 即拿到;`thread_id` 把问答串成线。数据库实测:`msg_186ff9007853 | to=run:run_8f607654de5c | thread=msg_37cdf8a4bd67`。
 
 ---
 
@@ -483,13 +509,13 @@ if (dispatch.assignee === from && dispatch.taskId === taskId) {
 
 ### 6.2 派活的两种方式:worker-start vs dispatch --inject
 
-|      | `worker-start`(推荐)                           | `dispatch --task X --to <h> --inject`(低层)  |
-| ---- | -------------------------------------------- | ------------------------------------------ |
-| 组成   | worktree/终端 + 派发 + 注入 合一步                    | 仅派发(终端要自己先建)                               |
-| 返回   | 完整 receipt(ready/effects/residualResources)  | 仅派发状态                                      |
-| 监控   | 有(worker-show/read/stop/release 全套)          | 无(operator 启动的终端视为 unsupervised)           |
-| 何时用  | 默认                                           | 自定义 argv(如 codex 定制 model/effort)、特殊拓扑     |
-| 注入   | 自动注入 preamble                                | `--inject` 才注入                             |
+|     | `worker-start`(推荐)                          | `dispatch --task X --to <h> --inject`(低层) |
+| --- | ------------------------------------------- | ----------------------------------------- |
+| 组成  | worktree/终端 + 派发 + 注入 合一步                   | 仅派发(终端要自己先建)                              |
+| 返回  | 完整 receipt(ready/effects/residualResources) | 仅派发状态                                     |
+| 监控  | 有(worker-show/read/stop/release 全套)         | 无(operator 启动的终端视为 unsupervised)          |
+| 何时用 | 默认                                          | 自定义 argv(如 codex 定制 model/effort)、特殊拓扑    |
+| 注入  | 自动注入 preamble                               | `--inject` 才注入                            |
 
 ```
 worker-start 的调用形态(合成代码):
@@ -556,7 +582,7 @@ orca worktree list --json
 orca terminal list --json
 orca terminal list --worktree <selector> --json
 orca terminal read --terminal <handle> --json
-orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json 
+orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 
 # 实时管道
 orca terminal send --terminal <handle> --text "..." --enter --json
